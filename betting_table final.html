@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>הפחים הירוקים</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body {
+    font-family: sans-serif;
+    background-color: white;
+    color: black;
+    direction: rtl;
+    padding: 20px;
+  }
+  h1 {
+    background-color: green;
+    color: white;
+    padding: 10px;
+    border-radius: 8px;
+    text-align: center;
+    margin-bottom: 10px;
+  }
+  #leader {
+    font-weight: bold;
+    margin-bottom: 5px;
+    font-size: 18px;
+    text-align: center;
+  }
+  #stats {
+    margin-bottom: 15px;
+    font-size: 16px;
+    background: #e9f5e9;
+    padding: 10px 15px;
+    border-radius: 8px;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+    direction: rtl;
+  }
+  #stats p {
+    margin: 6px 0;
+  }
+  #searchInput {
+    width: 100%;
+    max-width: 400px;
+    padding: 8px;
+    margin-bottom: 15px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    color: black;
+    margin-top: 10px;
+  }
+  th, td {
+    border: 1px solid #ccc;
+    padding: 8px;
+    text-align: center;
+    user-select: none;
+  }
+  th.sortable {
+    cursor: pointer;
+    background-color: #f0f0f0;
+    transition: background-color 0.3s ease;
+  }
+  th.sortable:hover {
+    background-color: #d4ffd4;
+  }
+  tr:nth-child(even) {
+    background-color: #f9f9f9;
+  }
+  .btn {
+    background-color: green;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-bottom: 20px;
+    margin-left: 10px;
+    user-select: none;
+    font-size: 14px;
+  }
+  .btn:disabled {
+    background-color: gray;
+    cursor: not-allowed;
+  }
+  .modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.7);
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .modal.show {
+    display: flex;
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .modal-content {
+    background: white;
+    color: black;
+    padding: 15px 10px;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 250px;
+    position: relative;
+    box-sizing: border-box;
+    font-size: 14px;
+  }
+  .form-group {
+    margin-bottom: 8px;
+  }
+  .form-group input, .form-group select {
+    width: 100%;
+    padding: 6px;
+    font-size: 14px;
+    box-sizing: border-box;
+  }
+  #toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #4BB543;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 5px;
+    font-weight: bold;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease;
+    z-index: 1000;
+    font-size: 14px;
+  }
+  #toast.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+</style>
+</head>
+<body>
+<h1>הפחים הירוקים</h1>
+<div id="leader">המוביל: -- עם 0 נקודות</div>
+<div id="stats"></div>
+<canvas id="totalsChart" style="max-width: 500px; margin: 0 auto 20px auto; background: #fff; border-radius: 14px; box-shadow: 0 2px 8px #eee;" height="120"></canvas>
+
+<input type="text" id="searchInput" placeholder="חפש לפי סוג משחק, מיקום, נגד מי או קבוצה מנצחת..." />
+
+<div style="margin-bottom: 10px; overflow: hidden;">
+  <button class="btn" id="addGameBtn">הוספת משחק</button>
+  <button class="btn" id="updateBetsBtn">עדכן הימורים</button>
+  <button class="btn" id="editBetBtn">ערוך הימור קיים</button>
+  <button class="btn" id="editGameDetailsBtn">עדכון נתוניי משחק בלבד</button>
+  <button class="btn" id="resetTableBtn" style="background: orange">איפוס</button>
+  <button class="btn" id="downloadBtn">הורד לאקסל</button>
+</div>
+
+<table id="gamesTable" aria-label="טבלת משחקים">
+  <thead>
+    <tr>
+      <th class="sortable" data-key="date">תאריך ▲▼</th>
+      <th class="sortable" data-key="gameType">סוג המשחק ▲▼</th>
+      <th class="sortable" data-key="location">מיקום משחק ▲▼</th>
+      <th class="sortable" data-key="opponent">נגד מי ▲▼</th>
+      <th class="sortable" data-key="winner">קבוצה מנצחת ▲▼</th>
+      <th>תוצאה סופית</th>
+      <th>הימור יאיר</th>
+      <th>הימור רן</th>
+      <th>הימור מאור</th>
+      <th>הימור אביב</th>
+      <th>נקודות יאיר</th>
+      <th>נקודות רן</th>
+      <th>נקודות מאור</th>
+      <th>נקודות אביב</th>
+    </tr>
+  </thead>
+  <tbody id="tableBody"></tbody>
+</table>
+
+<!-- מודלים להוספה, עריכה, עדכון משחקים והימורים -->
+
+<div class="modal" id="betModal" role="dialog" aria-modal="true" aria-labelledby="betModalTitle">
+  <div class="modal-content">
+    <h3 id="betModalTitle">עדכון הימורים</h3>
+    <div class="form-group">
+      <label for="dateSelect">בחר תאריך:</label>
+      <select id="dateSelect"></select>
+    </div>
+    <div class="form-group">
+      <label for="finalResult">תוצאה סופית:</label>
+      <input type="text" id="finalResult" />
+    </div>
+    <div class="form-group"><label for="betYair">יאיר:</label><input type="text" id="betYair" /></div>
+    <div class="form-group"><label for="betRan">רן:</label><input type="text" id="betRan" /></div>
+    <div class="form-group"><label for="betMaor">מאור:</label><input type="text" id="betMaor" /></div>
+    <div class="form-group"><label for="betAviv">אביב:</label><input type="text" id="betAviv" /></div>
+    <button class="btn" id="submitBetBtn">סיום</button>
+    <button class="btn" id="cancelBetBtn" style="background: red">ביטול</button>
+  </div>
+</div>
+
+<div class="modal" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+  <div class="modal-content">
+    <h3 id="editModalTitle">עריכת הימור קיים</h3>
+    <div class="form-group">
+      <label for="editDateSelect">בחר תאריך:</label>
+      <select id="editDateSelect"></select>
+    </div>
+    <div class="form-group">
+      <label for="editResult">תוצאה סופית:</label>
+      <input type="text" id="editResult" />
+    </div>
+    <div class="form-group"><label for="editYair">יאיר:</label><input type="text" id="editYair" /></div>
+    <div class="form-group"><label for="editRan">רן:</label><input type="text" id="editRan" /></div>
+    <div class="form-group"><label for="editMaor">מאור:</label><input type="text" id="editMaor" /></div>
+    <div class="form-group"><label for="editAviv">אביב:</label><input type="text" id="editAviv" /></div>
+    <button class="btn" id="updateBetBtn">עדכן</button>
+    <button class="btn" id="cancelEditBtn" style="background: red">ביטול</button>
+  </div>
+</div>
+
+<div class="modal" id="addGameModal" role="dialog" aria-modal="true" aria-labelledby="addGameModalTitle">
+  <div class="modal-content">
+    <h3 id="addGameModalTitle">הוספת משחק חדש</h3>
+    <div class="form-group">
+      <label for="newGameDate">תאריך (פורמט dd/mm/yyyy):</label>
+      <input type="text" id="newGameDate" placeholder="לדוגמה: 15/07/2025" />
+    </div>
+    <div class="form-group">
+      <label for="newGameType">סוג המשחק:</label>
+      <select id="newGameType">
+        <option value="" disabled selected>בחר סוג</option>
+        <option value="גביע">גביע</option>
+        <option value="ליגה">ליגה</option>
+        <option value="אירופה">אירופה</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="newGameLocation">מיקום משחק:</label>
+      <select id="newGameLocation">
+        <option value="" disabled selected>בחר מיקום</option>
+        <option value="בית">בית</option>
+        <option value="חוץ">חוץ</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="newGameOpponent">נגד מי:</label>
+      <input type="text" id="newGameOpponent" placeholder="שם קבוצה יריבה" />
+    </div>
+    <button class="btn" id="addGameSubmitBtn">הוסף</button>
+    <button class="btn" id="cancelAddGameBtn" style="background: red">ביטול</button>
+  </div>
+</div>
+
+<div class="modal" id="gameDetailsModal" role="dialog" aria-modal="true" aria-labelledby="gameDetailsModalTitle">
+  <div class="modal-content">
+    <h3 id="gameDetailsModalTitle">עדכון נתוניי משחק</h3>
+    <div class="form-group">
+      <label for="detailsGameSelect">בחר תאריך:</label>
+      <select id="detailsGameSelect"></select>
+    </div>
+    <div class="form-group"><label for="editGameDate">תאריך:</label><input type="text" id="editGameDate" /></div>
+    <div class="form-group"><label for="editGameType">סוג המשחק:</label>
+      <select id="editGameType">
+        <option value="גביע">גביע</option>
+        <option value="ליגה">ליגה</option>
+        <option value="אירופה">אירופה</option>
+      </select>
+    </div>
+    <div class="form-group"><label for="editGameLocation">מיקום:</label>
+      <select id="editGameLocation">
+        <option value="בית">בית</option>
+        <option value="חוץ">חוץ</option>
+      </select>
+    </div>
+    <div class="form-group"><label for="editGameOpponent">נגד מי:</label><input type="text" id="editGameOpponent" /></div>
+    <button class="btn" id="updateGameDetailsBtn">עדכן</button>
+    <button class="btn" id="cancelGameDetailsBtn" style="background: red">ביטול</button>
+  </div>
+</div>
+
+<div id="toast" role="alert" aria-live="assertive" aria-atomic="true"></div>
+
+<script>
+const initialGames = [
+  { date:"23/08/2025", gameType:"גביע", location:"בית", opponent:"מכבי בני ריינה", finalResult:"2-1", betYair:"1-2", betRan:"2-1", betMaor:"2-2", betAviv:"4-1", pointsYair:1, pointsRan:4, pointsMaor:0, pointsAviv:0 },
+  { date:"30/08/2025", gameType:"ליגה", location:"חוץ", opponent:"בית\"ר ירושלים", finalResult:"2-2", betYair:"1-0", betRan:"0-0", betMaor:"2-2", betAviv:"3-3", pointsYair:0, pointsRan:1, pointsMaor:4, pointsAviv:1 },
+  { date:"13/09/2025", gameType:"אירופה", location:"בית", opponent:"מ.ס. אשדוד", finalResult:"0-0", betYair:"0-0", betRan:"1-1", betMaor:"2-1", betAviv:"1-0", pointsYair:12, pointsRan:3, pointsMaor:0, pointsAviv:0 },
+  { date:"20/09/2025", gameType:"ליגה", location:"חוץ", opponent:"הפועל חיפה", finalResult:"5-0", betYair:"0-1", betRan:"1-2", betMaor:"2-2", betAviv:"5-0", pointsYair:0, pointsRan:0, pointsMaor:0, pointsAviv:4 },
+  { date:"27/09/2025", gameType:"גביע", location:"בית", opponent:"הפועל באר שבע", finalResult:"5-1", betYair:"5-1", betRan:"1-3", betMaor:"2-3", betAviv:"5-1", pointsYair:8, pointsRan:0, pointsMaor:0, pointsAviv:8 },
+  { date:"04/10/2025", gameType:"ליגה", location:"חוץ", opponent:"מכבי תל אביב", finalResult:"", betYair:"", betRan:"", betMaor:"", betAviv:"", pointsYair:0, pointsRan:0, pointsMaor:0, pointsAviv:0 },
+  { date:"18/10/2025", gameType:"ליגה", location:"בית", opponent:"מכבי נתניה", finalResult:"", betYair:"", betRan:"", betMaor:"", betAviv:"", pointsYair:0, pointsRan:0, pointsMaor:0, pointsAviv:0 },
+  { date:"25/10/2025", gameType:"ליגה", location:"חוץ", opponent:"עירוני טבריה", finalResult:"", betYair:"", betRan:"", betMaor:"", betAviv:"", pointsYair:0, pointsRan:0, pointsMaor:0, pointsAviv:0 },
+  { date:"01/11/2025", gameType:"גביע", location:"בית", opponent:"הפועל ירושלים", finalResult:"", betYair:"", betRan:"", betMaor:"", betAviv:"", pointsYair:0, pointsRan:0, pointsMaor:0, pointsAviv:0 },
+  { date:"08/11/2025", gameType:"ליגה", location:"בית", opponent:"בני סכנין", finalResult:"", betYair:"", betRan:"", betMaor:"", betAviv:"", pointsYair:0, pointsRan:0, pointsMaor:0, pointsAviv:0 }
+];
+
+let totalsChart = null;
+let games;
+
+document.addEventListener('DOMContentLoaded', () => {
+  games = JSON.parse(localStorage.getItem('gamesData')) || JSON.parse(JSON.stringify(initialGames));
+  let currentSortKey = null;
+  let currentSortDir = 1;
+
+  function saveGames() {
+    localStorage.setItem('gamesData', JSON.stringify(games));
+  }
+
+  function getDiff(result) {
+    if (!result || !result.includes("-")) return NaN;
+    const [a,b] = result.split("-").map(Number);
+    return a - b;
+  }
+
+  function getWinner(finalResult, opponent) {
+    if (!finalResult || !finalResult.includes("-")) return "-";
+    const diff = getDiff(finalResult);
+    if (diff > 0) return "מכבי חיפה";
+    else if (diff < 0) return opponent;
+    else return "תיקו";
+  }
+
+  function parseDate(str) {
+    const parts = str.split('/');
+    if(parts.length !== 3) return new Date(0);
+    const day = parseInt(parts[0],10);
+    const month = parseInt(parts[1],10) - 1;
+    const year = parseInt(parts[2],10);
+    return new Date(year, month, day);
+  }
+
+  function renderTable(filteredGames = null) {
+    const data = filteredGames || games;
+    const tbody = document.getElementById("tableBody");
+    tbody.innerHTML = "";
+    data.forEach(g => {
+      const winner = getWinner(g.finalResult, g.opponent);
+      const points = [g.pointsYair, g.pointsRan, g.pointsMaor, g.pointsAviv];
+      const maxPoints = Math.max(...points);
+      const minPoints = Math.min(...points);
+
+      function colorCell(value, isPoints) {
+        if (!isPoints) return '';
+        if (value === maxPoints && maxPoints !== minPoints) return 'background-color:#c8e6c9';
+        if (value === minPoints && maxPoints !== minPoints) return 'background-color:#f44336; color:white;';
+        return '';
+      }
+
+      tbody.innerHTML += `<tr>
+        <td>${g.date}</td>
+        <td>${g.gameType}</td>
+        <td>${g.location}</td>
+        <td>${g.opponent}</td>
+        <td>${winner}</td>
+        <td>${g.finalResult}</td>
+        <td>${g.betYair}</td>
+        <td>${g.betRan}</td>
+        <td>${g.betMaor}</td>
+        <td>${g.betAviv}</td>
+        <td style="${colorCell(g.pointsYair, true)}">${g.pointsYair}</td>
+        <td style="${colorCell(g.pointsRan, true)}">${g.pointsRan}</td>
+        <td style="${colorCell(g.pointsMaor, true)}">${g.pointsMaor}</td>
+        <td style="${colorCell(g.pointsAviv, true)}">${g.pointsAviv}</td>
+      </tr>`;
+    });
+    updateLeader();
+    updateStats(data);
+  }
+
+  function updateLeader() {
+    const totals = games.reduce((acc,g) => {
+      acc.yair += g.pointsYair;
+      acc.ran += g.pointsRan;
+      acc.maor += g.pointsMaor;
+      acc.aviv += g.pointsAviv;
+      return acc;
+    }, {yair:0, ran:0, maor:0, aviv:0});
+
+    const maxPoints = Math.max(totals.yair, totals.ran, totals.maor, totals.aviv);
+    let leaderName = "--";
+    if(maxPoints === totals.yair) leaderName = "יאיר";
+    else if(maxPoints === totals.ran) leaderName = "רן";
+    else if(maxPoints === totals.maor) leaderName = "מאור";
+    else if(maxPoints === totals.aviv) leaderName = "אביב";
+
+    document.getElementById("leader").innerText = `המוביל: ${leaderName} עם ${maxPoints} נקודות`;
+  }
+
+  function updateStats(data) {
+    if(!data || data.length === 0) {
+      document.getElementById("stats").innerHTML = "<p>אין נתונים להצגה</p>";
+      if (totalsChart) totalsChart.destroy();
+      return;
+    }
+    const totals = data.reduce((acc,g) => {
+      acc.yair += g.pointsYair;
+      acc.ran += g.pointsRan;
+      acc.maor += g.pointsMaor;
+      acc.aviv += g.pointsAviv;
+      return acc;
+    }, {yair:0, ran:0, maor:0, aviv:0});
+
+    const count = data.length;
+    const avgYair = (totals.yair / count).toFixed(2);
+    const avgRan = (totals.ran / count).toFixed(2);
+    const avgMaor = (totals.maor / count).toFixed(2);
+    const avgAviv = (totals.aviv / count).toFixed(2);
+
+    document.getElementById("stats").innerHTML = `
+      <p><strong>ממוצע נקודות למשחק:</strong> יאיר: ${avgYair}, רן: ${avgRan}, מאור: ${avgMaor}, אביב: ${avgAviv}</p>
+    `;
+
+    const ctx = document.getElementById('totalsChart').getContext('2d');
+    const names = ['יאיר', 'רן', 'מאור', 'אביב'];
+    const totalsArr = [totals.yair, totals.ran, totals.maor, totals.aviv];
+
+    const sorted = [...totalsArr].map((n, i) => ({name: names[i], val: n, idx: i}))
+      .sort((a, b) => b.val - a.val);
+
+    const colors = [];
+    sorted.forEach((obj, idx) => {
+      if(idx === 0) colors[obj.idx] = '#2ecc40';
+      else if(idx === 1) colors[obj.idx] = '#ffa500';
+      else if(idx === 2) colors[obj.idx] = '#0074D9';
+      else colors[obj.idx] = '#f44336';
+    });
+
+    if (totalsChart) totalsChart.destroy();
+    totalsChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: names,
+        datasets: [{
+          label: '',
+          data: totalsArr,
+          backgroundColor: colors,
+          borderRadius: 10,
+          borderWidth: 0
+        }]
+      },
+      options: {
+        indexAxis: 'x',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return context.dataset.data[context.dataIndex] + " נקודות";
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              stepSize: 5,
+              font: { size: 14 }
+            },
+            max: Math.max(...totalsArr, 30)
+          },
+          x: {
+            ticks: { font: { size: 15 } }
+          }
+        }
+      }
+    });
+  }
+
+  document.querySelectorAll("#gamesTable thead th.sortable").forEach(th => {
+    th.addEventListener("click", () => {
+      const key = th.getAttribute("data-key");
+      if(currentSortKey === key) currentSortDir *= -1;
+      else {
+        currentSortKey = key;
+        currentSortDir = 1;
+      }
+      sortGames();
+    });
+  });
+
+  function sortGames() {
+    games.sort((a,b) => {
+      let valA, valB;
+
+      if(currentSortKey === "winner") {
+        valA = getWinner(a.finalResult, a.opponent);
+        valB = getWinner(b.finalResult, b.opponent);
+      } else if(currentSortKey === "date") {
+        valA = parseDate(a.date);
+        valB = parseDate(b.date);
+      } else {
+        valA = a[currentSortKey];
+        valB = b[currentSortKey];
+      }
+
+      if(valA > valB) return currentSortDir;
+      if(valA < valB) return -currentSortDir;
+      return 0;
+    });
+    renderTable();
+  }
+
+  document.getElementById("searchInput").addEventListener("input", () => {
+    const val = document.getElementById("searchInput").value.trim().toLowerCase();
+    if(val === "") {
+      renderTable();
+      return;
+    }
+    const filtered = games.filter(g => {
+      const winner = getWinner(g.finalResult, g.opponent).toLowerCase();
+      return (
+        g.gameType.toLowerCase().includes(val) ||
+        g.location.toLowerCase().includes(val) ||
+        g.opponent.toLowerCase().includes(val) ||
+        winner.includes(val)
+      );
+    });
+    renderTable(filtered);
+  });
+
+  function isValidResultFormat(str) {
+    return /^\d+-\d+$/.test(str.trim());
+  }
+
+  function showModal(id) {
+    document.getElementById(id).classList.add("show");
+  }
+  function hideModal(id) {
+    document.getElementById(id).classList.remove("show");
+  }
+
+  // עדכון הימורים
+  const dateSelect = document.getElementById("dateSelect");
+  const finalResultInput = document.getElementById("finalResult");
+  const betInputs = {
+    yair: document.getElementById("betYair"),
+    ran: document.getElementById("betRan"),
+    maor: document.getElementById("betMaor"),
+    aviv: document.getElementById("betAviv"),
+  };
+
+  document.getElementById("updateBetsBtn").addEventListener("click", openModal);
+  document.getElementById("cancelBetBtn").addEventListener("click", closeModal);
+  document.getElementById("submitBetBtn").addEventListener("click", submitBet);
+
+  function openModal() {
+    dateSelect.innerHTML = '<option disabled selected>בחר תאריך</option>';
+    games.forEach((g,i) => {
+      dateSelect.innerHTML += `<option value="${i}">${g.date} - ${g.opponent}</option>`;
+    });
+    clearBetFields();
+    showModal("betModal");
+  }
+  function closeModal() {
+    hideModal("betModal");
+  }
+  function clearBetFields() {
+    finalResultInput.value = "";
+    Object.values(betInputs).forEach(input => {
+      input.value = "";
+      input.disabled = false;
+    });
+  }
+  dateSelect.addEventListener("change", () => {
+    const i = dateSelect.value;
+    if(i === "") return;
+    const g = games[i];
+    finalResultInput.value = g.finalResult || "";
+    betInputs.yair.value = g.betYair || "";
+    betInputs.ran.value = g.betRan || "";
+    betInputs.maor.value = g.betMaor || "";
+    betInputs.aviv.value = g.betAviv || "";
+
+    const disabled = g.finalResult && g.finalResult.trim() !== "";
+    Object.values(betInputs).forEach(input => {
+      input.disabled = disabled;
+    });
+  });
+
+  function submitBet() {
+    const i = dateSelect.value;
+    if (i === "") {
+      alert("אנא בחר תאריך");
+      return;
+    }
+    
+    const finalResult = finalResultInput.value.trim();
+    if (finalResult !== "" && !isValidResultFormat(finalResult)) {
+      alert("פורמט תוצאה לא תקין! יש להכניס בפורמט מספר-מספר בלבד, לדוגמה: 2-1");
+      return;
+    }
+    const g = games[i];
+    
+    let mul = 1;
+    if (g.gameType === "גביע") mul = 2;
+    else if (g.gameType === "אירופה") mul = 3;
+    
+    // בדיקה שכל ההימורים תקינים
+    const bets = [betInputs.yair.value.trim(), betInputs.ran.value.trim(), betInputs.maor.value.trim(), betInputs.aviv.value.trim()];
+    for (let b of bets) {
+      if (b !== "" && !isValidResultFormat(b)) {
+        alert("אחד או יותר מההימורים אינם בפורמט תקין! יש לתקן לפני המשך.");
+        return;
+      }
+    }
+
+    g.finalResult = finalResult;
+    g.betYair = betInputs.yair.value.trim();
+    g.betRan = betInputs.ran.value.trim();
+    g.betMaor = betInputs.maor.value.trim();
+    g.betAviv = betInputs.aviv.value.trim();
+
+    const realDiff = getDiff(g.finalResult);
+
+    ["Yair","Ran","Maor","Aviv"].forEach(name => {
+      const bet = g["bet"+name];
+      if(!g.finalResult || g.finalResult.trim() === "" || !bet || bet.trim() === "") {
+        g["points"+name] = 0;
+        return;
+      }
+      if (bet === g.finalResult) {
+        g["points"+name] = mul * 3;
+      } else {
+        const guessDiff = getDiff(bet);
+        if (!isNaN(realDiff) && !isNaN(guessDiff)) {
+          if ((realDiff > 0 && guessDiff > 0) ||
+              (realDiff < 0 && guessDiff < 0) ||
+              (realDiff === 0 && guessDiff === 0)) {
+            g["points"+name] = mul * 1;
+          } else {
+            g["points"+name] = 0;
+          }
+        } else {
+          g["points"+name] = 0;
+        }
+      }
+    });
+
+    saveGames();
+    renderTable();
+    closeModal();
+    showToast("ההימור עודכן בהצלחה!");
+  }
+
+  // עריכת הימור קיים
+  const editDateSelect = document.getElementById("editDateSelect");
+  const editResultInput = document.getElementById("editResult");
+  const editBetInputs = {
+    yair: document.getElementById("editYair"),
+    ran: document.getElementById("editRan"),
+    maor: document.getElementById("editMaor"),
+    aviv: document.getElementById("editAviv"),
+  };
+
+  document.getElementById("editBetBtn").addEventListener("click", openEditModal);
+  document.getElementById("cancelEditBtn").addEventListener("click", closeEditModal);
+  document.getElementById("updateBetBtn").addEventListener("click", updateBet);
+  editDateSelect.addEventListener("change", loadEditData);
+
+  function openEditModal() {
+    editDateSelect.innerHTML = '<option disabled selected>בחר תאריך</option>';
+    games.forEach((g,i) => {
+      editDateSelect.innerHTML += `<option value="${i}">${g.date} - ${g.opponent}</option>`;
+    });
+    clearEditFields();
+    showModal("editModal");
+  }
+  function closeEditModal() {
+    hideModal("editModal");
+  }
+  function clearEditFields() {
+    editResultInput.value = "";
+    Object.values(editBetInputs).forEach(input => {
+      input.value = "";
+      input.disabled = false;
+    });
+  }
+  function loadEditData() {
+    const i = editDateSelect.value;
+    if(i === "") {
+      clearEditFields();
+      return;
+    }
+    const g = games[i];
+    editResultInput.value = g.finalResult || "";
+    editBetInputs.yair.value = g.betYair || "";
+    editBetInputs.ran.value = g.betRan || "";
+    editBetInputs.maor.value = g.betMaor || "";
+    editBetInputs.aviv.value = g.betAviv || "";
+
+    const disabled = g.finalResult && g.finalResult.trim() !== "";
+    Object.values(editBetInputs).forEach(input => {
+      input.disabled = disabled;
+    });
+  }
+  function updateBet() {
+    const i = editDateSelect.value;
+    if (i === "") {
+      alert("אנא בחר תאריך");
+      return;
+    }
+    const finalResult = editResultInput.value.trim();
+    if (finalResult !== "" && !isValidResultFormat(finalResult)) {
+      alert("פורמט תוצאה לא תקין! יש להכניס בפורמט מספר-מספר בלבד, לדוגמה: 2-1");
+      return;
+    }
+    const g = games[i];
+    
+    let mul = 1;
+    if (g.gameType === "גביע") mul = 2;
+    else if (g.gameType === "אירופה") mul = 3;
+
+    // בדיקה שכל ההימורים תקינים
+    const bets = [editBetInputs.yair.value.trim(), editBetInputs.ran.value.trim(), editBetInputs.maor.value.trim(), editBetInputs.aviv.value.trim()];
+    for (let b of bets) {
+      if (b !== "" && !isValidResultFormat(b)) {
+        alert("אחד או יותר מההימורים אינם בפורמט תקין! יש לתקן לפני המשך.");
+        return;
+      }
+    }
+
+    g.finalResult = finalResult;
+    g.betYair = editBetInputs.yair.value.trim();
+    g.betRan = editBetInputs.ran.value.trim();
+    g.betMaor = editBetInputs.maor.value.trim();
+    g.betAviv = editBetInputs.aviv.value.trim();
+
+    const realDiff = getDiff(g.finalResult);
+
+    ["Yair","Ran","Maor","Aviv"].forEach(name => {
+      const bet = g["bet"+name];
+      if(!g.finalResult || g.finalResult.trim() === "" || !bet || bet.trim() === "") {
+        g["points"+name] = 0;
+        return;
+      }
+      if (bet === g.finalResult) {
+        g["points"+name] = mul * 3;
+      } else {
+        const guessDiff = getDiff(bet);
+        if (!isNaN(realDiff) && !isNaN(guessDiff)) {
+          if ((realDiff > 0 && guessDiff > 0) ||
+              (realDiff < 0 && guessDiff < 0) ||
+              (realDiff === 0 && guessDiff === 0)) {
+            g["points"+name] = mul * 1;
+          } else {
+            g["points"+name] = 0;
+          }
+        } else {
+          g["points"+name] = 0;
+        }
+      }
+    });
+
+    saveGames();
+    renderTable();
+    closeEditModal();
+    showToast("ההימור עודכן בהצלחה!");
+  }
+
+  // הוספת משחק
+  const addGameModal = document.getElementById("addGameModal");
+  const newGameDate = document.getElementById("newGameDate");
+  const newGameType = document.getElementById("newGameType");
+  const newGameLocation = document.getElementById("newGameLocation");
+  const newGameOpponent = document.getElementById("newGameOpponent");
+
+  document.getElementById("addGameBtn").addEventListener("click", () => {
+    newGameDate.value = "";
+    newGameType.value = "";
+    newGameLocation.value = "";
+    newGameOpponent.value = "";
+    showModal("addGameModal");
+  });
+  document.getElementById("cancelAddGameBtn").addEventListener("click", () => {
+    hideModal("addGameModal");
+  });
+  document.getElementById("addGameSubmitBtn").addEventListener("click", () => {
+    const date = newGameDate.value.trim();
+    const gameType = newGameType.value;
+    const location = newGameLocation.value;
+    const opponent = newGameOpponent.value.trim();
+
+    if(!date || !gameType || !location || !opponent) {
+      alert("אנא מלא את כל השדות");
+      return;
+    }
+
+    games.push({
+      date,
+      gameType,
+      location,
+      opponent,
+      finalResult: "",
+      betYair: "",
+      betRan: "",
+      betMaor: "",
+      betAviv: "",
+      pointsYair: 0,
+      pointsRan: 0,
+      pointsMaor: 0,
+      pointsAviv: 0,
+    });
+    saveGames();
+    renderTable();
+    hideModal("addGameModal");
+    showToast("המשחק נוסף בהצלחה!");
+  });
+
+  // הורדת CSV
+  document.getElementById("downloadBtn").addEventListener("click", downloadCSV);
+
+  function downloadCSV() {
+    if (!confirm("להורדת הטבלה כקובץ אקסל (CSV), לחץ אישור.")) return;
+
+    const headers = [
+      "תאריך",
+      "סוג המשחק",
+      "מיקום משחק",
+      "נגד מי",
+      "קבוצה מנצחת",
+      "תוצאה סופית",
+      "הימור יאיר",
+      "הימור רן",
+      "הימור מאור",
+      "הימור אביב",
+      "נקודות יאיר",
+      "נקודות רן",
+      "נקודות מאור",
+      "נקודות אביב"
+    ];
+
+    function quoteCSV(text) {
+      if (text == null) return '""';
+      let str = String(text).replace(/"/g, '""');
+      if (/^\d+\-\d+$/.test(str)) {
+        str = "'" + str;
+      }
+      return `"${str}"`;
+    }
+
+    let csvContent = "\uFEFF" + headers.map(quoteCSV).join(",") + "\n";
+
+    games.forEach(g => {
+      const winner = getWinner(g.finalResult, g.opponent);
+      const row = [
+        g.date,
+        g.gameType,
+        g.location,
+        g.opponent,
+        winner,
+        g.finalResult,
+        g.betYair,
+        g.betRan,
+        g.betMaor,
+        g.betAviv,
+        g.pointsYair,
+        g.pointsRan,
+        g.pointsMaor,
+        g.pointsAviv
+      ].map(quoteCSV);
+      csvContent += row.join(",") + "\n";
+    });
+
+    const blob = new Blob([csvContent], {type: 'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'betting_table.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // כפתור איפוס - מאפס רק תוצאה, הימורים ונקודות
+  document.getElementById("resetTableBtn").addEventListener("click", () => {
+    if (!confirm("האם אתה בטוח שברצונך לאפס את התוצאות והנקודות בלבד? שאר פרטי המשחקים יישמרו ללא שינוי.")) return;
+
+    games.forEach(g => {
+      g.finalResult = "";
+      g.betYair = "";
+      g.betRan = "";
+      g.betMaor = "";
+      g.betAviv = "";
+      g.pointsYair = 0;
+      g.pointsRan = 0;
+      g.pointsMaor = 0;
+      g.pointsAviv = 0;
+    });
+
+    saveGames();
+    renderTable();
+    showToast("התוצאה והנקודות אופסו בהצלחה! פרטי המשחקים נשמרו.");
+  });
+
+  // עדכון נתוני משחק בלבד
+  const editGameDetailsBtn = document.getElementById("editGameDetailsBtn");
+  const gameDetailsModal = document.getElementById("gameDetailsModal");
+  const detailsGameSelect = document.getElementById("detailsGameSelect");
+  const editGameDate = document.getElementById("editGameDate");
+  const editGameType = document.getElementById("editGameType");
+  const editGameLocation = document.getElementById("editGameLocation");
+  const editGameOpponent = document.getElementById("editGameOpponent");
+  const updateGameDetailsBtn = document.getElementById("updateGameDetailsBtn");
+  const cancelGameDetailsBtn = document.getElementById("cancelGameDetailsBtn");
+
+  editGameDetailsBtn.addEventListener("click", () => {
+    detailsGameSelect.innerHTML = '<option disabled selected>בחר תאריך</option>';
+    games.forEach((g, i) => {
+      detailsGameSelect.innerHTML += `<option value="${i}">${g.date} - ${g.opponent}</option>`;
+    });
+    editGameDate.value = "";
+    editGameType.value = "ליגה";
+    editGameLocation.value = "בית";
+    editGameOpponent.value = "";
+    showModal("gameDetailsModal");
+  });
+
+  detailsGameSelect.addEventListener("change", () => {
+    const i = detailsGameSelect.value;
+    if (i === "") {
+      editGameDate.value = "";
+      editGameType.value = "ליגה";
+      editGameLocation.value = "בית";
+      editGameOpponent.value = "";
+      return;
+    }
+    const g = games[i];
+    editGameDate.value = g.date;
+    editGameType.value = g.gameType;
+    editGameLocation.value = g.location;
+    editGameOpponent.value = g.opponent;
+  });
+
+  updateGameDetailsBtn.addEventListener("click", () => {
+    const i = detailsGameSelect.value;
+    if (i === "") {
+      alert("אנא בחר משחק לעדכון");
+      return;
+    }
+    if (!editGameDate.value.trim() || !editGameOpponent.value.trim()) {
+      alert("אנא מלא תאריך ושם קבוצה");
+      return;
+    }
+    games[i].date = editGameDate.value.trim();
+    games[i].gameType = editGameType.value;
+    games[i].location = editGameLocation.value;
+    games[i].opponent = editGameOpponent.value.trim();
+
+    saveGames();
+    renderTable();
+    hideModal("gameDetailsModal");
+    showToast("נתוני המשחק עודכנו בהצלחה!");
+  });
+
+  cancelGameDetailsBtn.addEventListener("click", () => {
+    hideModal("gameDetailsModal");
+  });
+
+  // Toast הודעות
+  const toast = document.getElementById("toast");
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 3000);
+  }
+
+  renderTable();
+});
+</script>
+</body>
+</html>
